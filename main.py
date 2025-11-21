@@ -14,7 +14,7 @@ from email.utils import formataddr, formatdate, make_msgid
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Union
-
+import OpenAI
 import pytz
 import requests
 import yaml
@@ -183,7 +183,10 @@ def load_config():
     config["NTFY_TOKEN"] = os.environ.get("NTFY_TOKEN", "").strip() or webhooks.get(
         "ntfy_token", ""
     )
-
+    # deepseek API Key
+    config["DEEPSEEK_API_KEY"] = os.environ.get(
+        "DEEPSEEK_API_KEY", ""
+    ).strip() or webhooks.get("deepseek_api_key", "")
     # 输出配置来源信息
     notification_sources = []
     if config["FEISHU_WEBHOOK_URL"]:
@@ -222,7 +225,10 @@ CONFIG = load_config()
 print(f"TrendRadar v{VERSION} 配置加载完成")
 print(f"监控平台数量: {len(CONFIG['PLATFORMS'])}")
 
-
+ai_client = OpenAI(
+            api_key=CONFIG["DEEPSEEK_API_KEY"], 
+            base_url="https://api.deepseek.com"  # 关键：指向 DeepSeek 地址
+        )
 # === 工具函数 ===
 def get_beijing_time():
     """获取北京时间"""
@@ -3585,9 +3591,36 @@ def send_to_dingtalk(
             return False
 
     print(f"钉钉所有 {len(batches)} 批次发送完成 [{report_type}]")
-    return True
+    text = render_dingtalk_content(report_data, report_type, update_info, mode)
+    try:
+        response = ai_client.chat.completions.create(
+            model="deepseek-chat",  # DeepSeek 模型名称
+            messages=[
+                {"role": "system", "content": "你是一个专业的新闻编辑。请将用户以下内容做出归纳总结并对重点内容排序，重点突出核心事实。并以markdown的格式发给我"},
+                {"role": "user", "content": text}
+            ],
+            stream=False
+        )
+        text_deepseek= response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"❌ DeepSeek 调用失败: {e}")
+        text_deepseek = "DeepSeek 调用失败，无法生成摘要。"
 
-
+    try:
+        payload = { 
+            "msgtype": "markdown",
+            "markdown": {
+                "title": f"TrendRadar 热点分析报告 - {report_type}",
+                "text": text_deepseek,
+            },
+        }
+        response = requests.post(
+            webhook_url, headers=headers, json=payload, proxies=proxies, timeout=30
+        )
+    except Exception as e:
+        print(f"❌ 钉钉调用失败: {e}")
+        return False
+    
 def strip_markdown(text: str) -> str:
     """去除文本中的 markdown 语法格式，用于个人微信推送"""
 
