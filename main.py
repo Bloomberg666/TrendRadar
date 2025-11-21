@@ -14,7 +14,7 @@ from email.utils import formataddr, formatdate, make_msgid
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Union
-import OpenAI
+from openai import OpenAI
 import pytz
 import requests
 import yaml
@@ -3591,12 +3591,12 @@ def send_to_dingtalk(
             return False
 
     print(f"钉钉所有 {len(batches)} 批次发送完成 [{report_type}]")
-    text = render_dingtalk_content(report_data, report_type, update_info, mode)
+    text = render_dingtalk_content(report_data)
     try:
         response = ai_client.chat.completions.create(
             model="deepseek-chat",  # DeepSeek 模型名称
             messages=[
-                {"role": "system", "content": "你是一个专业的新闻编辑。请将用户以下内容做出归纳总结并对重点内容排序，重点突出核心事实。并以markdown的格式发给我"},
+                {"role": "system", "content": "你是一个专业的新闻编辑。请将用户以下内容做出归纳总结并对重点内容排序，重点突出核心事实，经济相关优先。并以markdown的格式发给我"},
                 {"role": "user", "content": text}
             ],
             stream=False
