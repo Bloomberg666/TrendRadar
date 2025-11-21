@@ -3604,7 +3604,7 @@ def send_to_dingtalk(
         text_deepseek= response.choices[0].message.content.strip()
     except Exception as e:
         print(f"❌ DeepSeek 调用失败: {e}")
-        text_deepseek = "DeepSeek 调用失败: {e}"
+        text_deepseek = f"DeepSeek 调用失败: {e}"
 
     try:
         payload = { 
